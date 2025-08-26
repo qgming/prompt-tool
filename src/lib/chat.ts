@@ -32,10 +32,10 @@ function getModelSettings(): ModelSettings {
   }
 }
 
-// 获取系统提示词 - 基于OpenAI最佳实践
-function getSystemPrompt(): string {
+// 获取系统提示词 - 支持多个提示词
+function getSystemPrompt(promptKey: string = 'systemPromptA'): string {
   try {
-    const savedPrompt = localStorage.getItem('systemPrompt');
+    const savedPrompt = localStorage.getItem(promptKey);
     return savedPrompt || `你是一个AI助手，专门使用工具来回答用户问题。
 
 ## 可用工具
@@ -75,13 +75,14 @@ function createOpenAIClient(): OpenAI | null {
   });
 }
 
-// 发送聊天消息 - 增强版，包含详细日志
+// 发送聊天消息 - 增强版，支持自定义系统提示词
 export async function sendChatMessage(
   messages: ChatMessage[],
-  onStream: (chunk: string) => void
+  onStream: (chunk: string) => void,
+  systemPromptKey?: string
 ): Promise<void> {
   const settings = getModelSettings();
-  const systemPrompt = getSystemPrompt();
+  const systemPrompt = getSystemPrompt(systemPromptKey);
   const client = createOpenAIClient();
   const requestStartTime = Date.now();
 
