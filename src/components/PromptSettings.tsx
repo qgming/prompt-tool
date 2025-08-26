@@ -1,24 +1,7 @@
 import { useState, useEffect } from 'react'
 
 export function PromptSettings() {
-  const [promptA, setPromptA] = useState(`你是一个AI助手，仅通过工具调用响应用户查询。
-
-## 工具调用规则
-- 检测到人物名称时，立即调用get_character_info工具
-- 禁止前置语义化回复
-- 直接返回工具查询结果
-
-## 可用工具
-get_character_info: 查询人物信息
-参数: name (人物姓名)
-可用人物: 张三、李四、王五、赵六、孙七
-
-## 响应格式
-仅返回工具查询结果，不添加解释性文字。
-
-## 示例调用
-用户："张三"
-AI：{"name":"get_character_info","arguments":{"name":"张三"}}`)
+  const [promptA, setPromptA] = useState(`你是一个AI助手`)
 
   const [promptB, setPromptB] = useState(`你是一个AI助手，仅通过工具调用响应用户查询。
 
