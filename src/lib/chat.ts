@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { getToolDefinitions, executeTool } from '../tools';
-import { createAPIRequestEvent } from './statusEvents';
+import { createAPIRequestEvent, createToolCallEvent } from './statusEvents';
 
 // 类型定义
 export type ChatMessage = OpenAI.Chat.ChatCompletionMessageParam;
@@ -75,7 +75,7 @@ function createOpenAIClient(): OpenAI | null {
   });
 }
 
-// 发送聊天消息 - 简化版
+// 发送聊天消息 - 增强版，包含详细日志
 export async function sendChatMessage(
   messages: ChatMessage[],
   onStream: (chunk: string) => void
@@ -93,6 +93,17 @@ export async function sendChatMessage(
     { role: 'system' as const, content: systemPrompt },
     ...messages
   ];
+
+  // 详细日志：API请求开始
+  console.group('🚀 API调用开始');
+  console.log('📋 请求配置:', {
+    model: settings.modelName,
+    temperature: settings.temperature,
+    topP: settings.topP,
+    apiUrl: settings.apiUrl
+  });
+  console.log('💬 消息内容:', JSON.stringify(currentMessages, null, 2));
+  console.groupEnd();
 
   // 发送API请求开始事件
   createAPIRequestEvent({
@@ -113,7 +124,8 @@ export async function sendChatMessage(
     while (iteration < maxIterations) {
       iteration++;
       
-      console.log(`🔄 第 ${iteration} 轮对话`);
+      console.group(`🔄 第 ${iteration} 轮对话`);
+      console.log('📤 发送消息:', JSON.stringify(currentMessages, null, 2));
       
       // 获取AI回复
       const response = await client.chat.completions.create({
@@ -124,11 +136,15 @@ export async function sendChatMessage(
         tools: tools
       });
 
+      console.log('📥 收到响应:', JSON.stringify(response, null, 2));
+      console.groupEnd();
+
       const aiMessage = response.choices[0].message;
       
       // 处理工具调用
       if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
-        console.log('🔧 执行工具调用:', aiMessage.tool_calls.length, '个');
+        console.group('🔧 工具调用处理');
+        console.log(`发现 ${aiMessage.tool_calls.length} 个工具调用`);
         
         // 添加AI消息到历史
         currentMessages.push({
@@ -141,9 +157,33 @@ export async function sendChatMessage(
         const toolResults = [];
         for (const toolCall of aiMessage.tool_calls) {
           if ('function' in toolCall) {
+            const toolStartTime = Date.now();
             const args = JSON.parse(toolCall.function.arguments);
+            
+            console.group(`🛠️ 执行工具: ${toolCall.function.name}`);
+            console.log('参数:', JSON.stringify(args, null, 2));
+            
+            // 发送工具调用开始事件
+            createToolCallEvent({
+              toolName: toolCall.function.name,
+              arguments: args,
+              status: 'started'
+            });
+
             const result = await executeTool(toolCall.function.name, args);
             
+            console.log('结果:', JSON.stringify(result, null, 2));
+            console.groupEnd();
+            
+            // 发送工具调用完成事件
+            createToolCallEvent({
+              toolName: toolCall.function.name,
+              arguments: args,
+              status: 'completed',
+              result,
+              duration: Date.now() - toolStartTime
+            });
+
             toolResults.push({
               tool_call_id: toolCall.id,
               content: JSON.stringify(result)
@@ -160,12 +200,13 @@ export async function sendChatMessage(
           });
         });
 
-        // 继续对话获取最终回复
+        console.groupEnd();
         continue;
       }
 
       // 没有工具调用，直接回复
       if (aiMessage.content) {
+        console.log('💬 AI回复内容:', aiMessage.content);
         const content = aiMessage.content;
         const chunkSize = Math.max(1, Math.ceil(content.length / 15));
         
@@ -204,7 +245,11 @@ export async function sendChatMessage(
       ? '服务器内部错误，请稍后再试'
       : `API调用失败: ${apiError.message || '未知错误'}`;
     
-    console.error('❌ API调用失败:', errorMessage);
+    console.error('❌ API调用失败:', {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : '无堆栈信息',
+      timestamp: new Date().toISOString()
+    });
     
     createAPIRequestEvent({
       model: settings.modelName,

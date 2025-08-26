@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Activity, Clock, Server, Terminal, AlertCircle } from "lucide-react"
+import { Activity, Clock, Server, Terminal, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { statusEventBus, type StatusEvent } from "../lib/statusEvents"
 
 interface StatusPanelProps {
@@ -16,6 +16,7 @@ export function StatusPanel({ className = "" }: StatusPanelProps) {
     model: "GPT-4",
     connected: true
   })
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set())
 
   // 监听事件更新
   useEffect(() => {
@@ -106,6 +107,165 @@ export function StatusPanel({ className = "" }: StatusPanelProps) {
     }
   }
 
+  const toggleEventExpansion = (eventId: string) => {
+    setExpandedEvents(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(eventId)) {
+        newSet.delete(eventId)
+      } else {
+        newSet.add(eventId)
+      }
+      return newSet
+    })
+  }
+
+  const renderEventDetails = (event: StatusEvent) => {
+    const isExpanded = expandedEvents.has(event.id)
+    
+    return (
+      <div key={event.id} className={`p-3 rounded-lg border ${getStatusColor(event)}`}>
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => toggleEventExpansion(event.id)}
+        >
+          <div className="flex items-center gap-2">
+            {getEventIcon(event)}
+            <span className="text-sm font-medium">
+              {event.type === 'api_request' && 'API请求'}
+              {event.type === 'tool_call' && '工具调用'}
+              {event.type === 'system' && '系统事件'}
+              {event.type === 'stream' && '流式响应'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-600">
+              {formatTimestamp(event.timestamp)}
+            </div>
+            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </div>
+        </div>
+        
+        {isExpanded && (
+          <div className="mt-2 ml-6 space-y-1 text-xs">
+            {event.type === 'api_request' && (
+              <>
+                <div className="text-gray-600">
+                  <span className="font-medium">模型:</span> {event.model}
+                </div>
+                <div className="text-gray-600">
+                  <span className="font-medium">消息数:</span> {event.messages.length}
+                </div>
+                <div className="text-gray-600">
+                  <span className="font-medium">设置:</span> temp={event.settings.temperature}, topP={event.settings.topP}
+                </div>
+                {event.status === 'failed' && event.error && (
+                  <div className="text-red-600">
+                    <span className="font-medium">错误:</span> {event.error}
+                  </div>
+                )}
+              </>
+            )}
+            
+            {event.type === 'tool_call' && (
+              <>
+                <div className="text-gray-600">
+                  <span className="font-medium">工具:</span> {event.toolName}
+                </div>
+                {event.arguments && Object.keys(event.arguments).length > 0 && (
+                  <div className="text-gray-600">
+                    <span className="font-medium">参数:</span>
+                    <pre className="mt-1 p-1 bg-gray-100 rounded text-xs overflow-x-auto">
+                      {JSON.stringify(event.arguments, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {event.result && (
+                  <div className="text-gray-600">
+                    <span className="font-medium">结果:</span>
+                    <pre className="mt-1 p-1 bg-gray-100 rounded text-xs overflow-x-auto">
+                      {JSON.stringify(event.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {event.status === 'failed' && event.error && (
+                  <div className="text-red-600">
+                    <span className="font-medium">错误:</span> {event.error}
+                  </div>
+                )}
+              </>
+            )}
+            
+            {(event.type === 'api_request' || event.type === 'tool_call') && event.duration && (
+              <div className="text-gray-600">
+                <span className="font-medium">耗时:</span> {formatDuration(event.duration)}
+              </div>
+            )}
+            
+            {event.type === 'system' && (
+              <div className="text-gray-600">
+                <span className="font-medium">消息:</span> {event.message}
+                {event.details && (
+                  <pre className="mt-1 p-1 bg-gray-100 rounded text-xs overflow-x-auto">
+                    {JSON.stringify(event.details, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
+            
+            {event.type === 'stream' && (
+              <div className="text-gray-600">
+                <span className="font-medium">内容:</span> {event.content}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {!isExpanded && (
+          <div className="mt-1 ml-6">
+            {event.type === 'api_request' && (
+              <div className="text-xs text-gray-600">
+                模型: {event.model}
+                {event.status === 'failed' && event.error && (
+                  <span className="text-red-600 ml-2">错误: {event.error}</span>
+                )}
+              </div>
+            )}
+            
+            {event.type === 'tool_call' && (
+              <div className="text-xs text-gray-600">
+                工具: {event.toolName}
+                {event.arguments && Object.keys(event.arguments).length > 0 && (
+                  <span className="ml-2">参数: {JSON.stringify(event.arguments).substring(0, 50)}...</span>
+                )}
+                {event.status === 'failed' && event.error && (
+                  <span className="text-red-600 ml-2">错误: {event.error}</span>
+                )}
+              </div>
+            )}
+            
+            {(event.type === 'api_request' || event.type === 'tool_call') && event.duration && (
+              <div className="text-xs text-gray-600 ml-6">
+                耗时: {formatDuration(event.duration)}
+              </div>
+            )}
+            
+            {event.type === 'system' && (
+              <div className="text-xs text-gray-600 mt-1 ml-6">
+                {event.message}
+              </div>
+            )}
+            
+            {event.type === 'stream' && (
+              <div className="text-xs text-gray-600 mt-1 ml-6">
+                {event.content.substring(0, 50)}...
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className={`w-full md:w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-auto ${className}`}>
       {/* 头部 */}
@@ -161,73 +321,7 @@ export function StatusPanel({ className = "" }: StatusPanelProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {events.map((event) => (
-              <div key={event.id} className={`p-3 rounded-lg border ${getStatusColor(event)}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getEventIcon(event)}
-                    <span className="text-sm font-medium">
-                      {event.type === 'api_request' && 'API请求'}
-                      {event.type === 'tool_call' && '工具调用'}
-                      {event.type === 'system' && '系统事件'}
-                      {event.type === 'stream' && '流式响应'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {formatTimestamp(event.timestamp)}
-                  </div>
-                </div>
-                
-                {event.type === 'api_request' && (
-                  <>
-                    <div className="text-xs text-gray-600 mt-1 ml-6">
-                      模型: {event.model}
-                    </div>
-                    {event.status === 'failed' && event.error && (
-                      <div className="text-xs text-red-600 mt-1 ml-6">
-                        错误: {event.error}
-                      </div>
-                    )}
-                  </>
-                )}
-                
-                {event.type === 'tool_call' && (
-                  <>
-                    <div className="text-xs text-gray-600 mt-1 ml-6">
-                      工具: {event.toolName}
-                    </div>
-                    {event.arguments && Object.keys(event.arguments).length > 0 && (
-                      <div className="text-xs text-gray-500 mt-1 ml-6">
-                        参数: {JSON.stringify(event.arguments).substring(0, 50)}...
-                      </div>
-                    )}
-                    {event.status === 'failed' && event.error && (
-                      <div className="text-xs text-red-600 mt-1 ml-6">
-                        错误: {event.error}
-                      </div>
-                    )}
-                  </>
-                )}
-                
-                {(event.type === 'api_request' || event.type === 'tool_call') && event.duration && (
-                  <div className="text-xs text-gray-600 ml-6">
-                    耗时: {formatDuration(event.duration)}
-                  </div>
-                )}
-                
-                {event.type === 'system' && (
-                  <div className="text-xs text-gray-600 mt-1 ml-6">
-                    {event.message}
-                  </div>
-                )}
-                
-                {event.type === 'stream' && (
-                  <div className="text-xs text-gray-600 mt-1 ml-6">
-                    {event.content.substring(0, 50)}...
-                  </div>
-                )}
-              </div>
-            ))}
+            {events.map(renderEventDetails)}
           </div>
         )}
       </div>
