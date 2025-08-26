@@ -1,10 +1,6 @@
 import { SettingsPanel } from "./components/SettingsPanel"
 import { ChatArea } from "./components/ChatArea"
 import { StatusPanel } from "./components/StatusPanel"
-import { registerBuiltInTools } from "./tools/impl"
-
-// 注册所有内置工具
-registerBuiltInTools()
 
 function App() {
   return (
